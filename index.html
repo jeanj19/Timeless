@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Timeless – Pre-loved & New Fashion</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --white: #ffffff;
+      --black: #111111;
+      --sky: #87ceeb;
+    }
+    *{box-sizing:border-box;margin:0;padding:0;font-family:'Poppins',sans-serif}
+    body{background:var(--white);color:var(--black)}
+    header{background:var(--sky);padding:1rem 1.2rem;display:flex;justify-content:space-between;align-items:center}
+    header h1{font-weight:600;font-size:1.4rem}
+    .cart-icon{position:relative;cursor:pointer}
+    .cart-icon span{position:absolute;top:-8px;right:-8px;background:var(--black);color:var(--white);border-radius:50%;width:18px;height:18px;display:flex;align-items:center;justify-content:center;font-size:.7rem}
+    main{padding:1.2rem;display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:1rem}
+    .card{background:#f7f7f7;border:1px solid #e5e5e5;border-radius:8px;overflow:hidden;display:flex;flex-direction:column}
+    .card img{width:100%;height:200px;object-fit:cover}
+    .card-body{padding:.7rem;flex:1;display:flex;flex-direction:column;justify-content:space-between}
+    .card-body h4{font-size:.9rem;margin-bottom:.3rem}
+    .card-body .price{font-weight:600;color:var(--sky)}
+    .card-body button{width:100%;margin-top:.5rem;padding:.4rem;border:none;background:var(--black);color:var(--white);border-radius:4px;cursor:pointer}
+    .modal{position:fixed;inset:0;background:rgba(0,0,0,.4);display:none;place-items:center;padding:1rem}
+    .modal-content{background:var(--white);border-radius:8px;padding:1.2rem;max-width:400px;width:100%;max-height:90vh;overflow:auto}
+    .modal-content h2{margin-bottom:.8rem}
+    .item-row{display:flex;justify-content:space-between;align-items:center;margin-bottom:.6rem}
+    .checkout-bar{text-align:right;margin-top:1rem}
+    .checkout-bar button{background:var(--sky);border:none;padding:.6rem 1rem;border-radius:4px;cursor:pointer;font-weight:600}
+    @media(min-width:600px){main{grid-template-columns:repeat(auto-fill,minmax(200px,1fr))}}
+  </style>
+</head>
+<body>
+<header>
+  <h1>Timeless</h1>
+  <div class="cart-icon" onclick="toggleCart()">
+    🛒<span id="badge">0</span>
+  </div>
+</header>
+
+<main id="catalog"></main>
+
+<!-- Cart Modal -->
+<div id="cartModal" class="modal">
+  <div class="modal-content">
+    <h2>Your Cart</h2>
+    <div id="cartItems"></div>
+    <div class="checkout-bar">
+      <strong>Total: KES <span id="total">0</span></strong><br><br>
+      <button onclick="checkout()">Checkout & Pay via M-Pesa</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ---------- tiny state ---------- */
+let stock = [];          // will hold the Google-Sheet rows
+let cart  = JSON.parse(localStorage.getItem('timelessCart')||'[]');
+
+/* ---------- load catalog ---------- */
+fetch('https://docs.google.com/spreadsheets/d/e/2PACX-1vSPDgAjdoWaE5fPrVrLemybzEgxKMrKDQDLCDLMyftIJxAlF6tAUjuBtzFhTioAbKInMh-J5G6KyfIh/pub?gid=0&single=true&output=csv')
+  .then(r=>r.text())
+  .then(text=>{
+     stock = csvToArray(text);
+     renderCatalog();
+     renderCart();
+  });
+
+function csvToArray(str){
+  const lines=str.trim().split('\n');
+  const heads=lines[0].split(',');
+  return lines.slice(1).map(l=>{
+     const vals=l.split(',');
+     let o={}; heads.forEach((h,i)=>o[h]=vals[i]); return o;
+  });
+}
+
+function renderCatalog(){
+  const main=document.getElementById('catalog');
+  main.innerHTML='';
+  stock.filter(p=> +p.stock >0).forEach(p=>{
+     main.insertAdjacentHTML('beforeend',`
+      <div class="card">
+        <img src="${p.imageUrl}" alt="${p.name}">
+        <div class="card-body">
+          <div>
+            <h4>${p.name} (${p.size})</h4>
+            <small>${p.category} – SKU ${p.sku}</small>
+            <div class="price">KES ${p.price}</div>
+          </div>
+          <button onclick="addToCart('${p.sku}')">Add to Cart</button>
+        </div>
+      </div>
+     `);
+  });
+}
+
+/* ---------- cart logic ---------- */
+function addToCart(sku){
+  const item=stock.find(i=>i.sku===sku);
+  if(!item){alert('Item not found');return}
+  const exist=cart.find(x=>x.sku===sku);
+  if(exist){exist.qty=(exist.qty||1)+1}
+  else{cart.push({...item,qty:1})}
+  saveCart(); renderCart();
+}
+function saveCart(){localStorage.setItem('timelessCart',JSON.stringify(cart))}
+function toggleCart(){
+  const m=document.getElementById('cartModal');
+  m.style.display=m.style.display==='grid'?'none':'grid';
+}
+function renderCart(){
+  const box=document.getElementById('cartItems');
+  const badge=document.getElementById('badge');
+  const totalEl=document.getElementById('total');
+  box.innerHTML=''; let t=0;
+  cart.forEach(it=>{
+     t += it.price*it.qty;
+     box.insertAdjacentHTML('beforeend',`
+       <div class="item-row">
+         <span>${it.name} x${it.qty}</span>
+         <span>KES ${it.price*it.qty}</span>
+       </div>
+     `);
+  });
+  badge.textContent=cart.reduce((s,it)=>s+it.qty,0);
+  totalEl.textContent=t;
+}
+
+/* ---------- checkout ---------- */
+function checkout(){
+  if(!cart.length){alert('Cart is empty');return}
+  let msg=`NEW ORDER from Timeless\n`;
+  let total=0;
+  cart.forEach(it=>{
+     msg+=`${it.name} (${it.size}) x${it.qty} – KES ${it.price*it.qty}\n`;
+     total+=it.price*it.qty;
+  });
+  msg+=`Total: KES ${total}\n\n`;
+  msg+=`Send to: Timeless| Till/Buy Goods 0769595892`;
+  const url='https://wa.me/254705988910?text='+encodeURIComponent(msg);
+  window.open(url,'_blank');
+  /* optional: reduce stock in sheet via Google-Apps-Script webhook */
+  cart=[]; saveCart(); renderCart(); toggleCart();
+}
+</script>
+</body>
+</html>
